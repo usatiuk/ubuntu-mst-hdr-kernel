@@ -1,0 +1,15 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: linux-mst-hdr-meta
+Source: https://patchwork.freedesktop.org/series/169609/
+
+Files: *
+Copyright: 2026 mst-hdr-kernel contributors
+License: GPL-2.0-only
+
+License: GPL-2.0-only
+ This package is free software; you can redistribute it and/or modify it
+ under the terms of the GNU General Public License version 2.
+ .
+ On Debian and Ubuntu systems, the complete text of the GNU General Public
+ License version 2 is available in /usr/share/common-licenses/GPL-2.
+

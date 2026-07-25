@@ -1,0 +1,19 @@
+Source: linux-mst-hdr-meta
+Section: kernel
+Priority: optional
+Maintainer: @DEBFULLNAME@ <@DEBEMAIL@>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: linux-mst-hdr
+Architecture: amd64
+Depends:
+ linux-image-unsigned-@KERNEL_RELEASE@ (= @CUSTOM_VERSION@),
+ linux-modules-@KERNEL_RELEASE@ (= @CUSTOM_VERSION@),
+ linux-headers-@KERNEL_RELEASE@ (= @CUSTOM_VERSION@),
+ ${misc:Depends}
+Description: Experimental Intel HDR-over-DP-MST kernel
+ Tracks the complete Ubuntu generic kernel carrying the experimental Intel
+ HDR-over-DP-MST backport. This package is not supported by Canonical.
+

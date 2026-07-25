@@ -1,0 +1,6 @@
+linux-mst-hdr-meta (@META_VERSION@) resolute; urgency=medium
+
+  * Track the @KERNEL_RELEASE@ MST-HDR experimental kernel.
+
+ -- @DEBFULLNAME@ <@DEBEMAIL@>  @RFC2822_DATE@
+
