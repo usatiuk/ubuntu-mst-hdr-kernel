@@ -9,7 +9,7 @@ bash -n "${root}/mst-hdr-kernel"
 test -x "${root}/mst-hdr-kernel"
 test -x "${root}/meta/debian/rules"
 test -f "${root}/container/Dockerfile"
-test -f "${root}/patches/intel-mst-hdr-v3-ubuntu-7.0.patch"
+test -f "${root}/patches/intel-mst-vrr-hdr-v6-ubuntu-7.0.patch"
 
 if command -v shellcheck >/dev/null 2>&1; then
     shellcheck "${root}/mst-hdr-kernel" "${root}/tests/test-static.sh"

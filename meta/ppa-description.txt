@@ -1,0 +1,12 @@
+Experimental Ubuntu 26.04 (Resolute) generic kernels enabling HDR and VRR over Intel DisplayPort MST.
+
+The updated backport uses Xiao Lu's VRR/HDR-over-MST v6 series, with Gil Dekel's per-monitor colorimetry capability handling. It enables HDR metadata, HDR fastsets and 10-bpc (30-bpp) MST input where supported by the monitor, platform and available link bandwidth/DSC. Color depth and VRR support are negotiated; they are not guaranteed for every monitor or MST topology.
+
+ZFS MODULES ARE NOT PROVIDED for the custom kernel ABI. Do not use this kernel on systems that require ZFS, including ZFS root filesystems.
+
+The custom ABI is 999 and installs alongside the stock Ubuntu kernel. Keep a stock kernel available for rollback. The kernel image is unsigned; Secure Boot must be disabled to boot it as supplied. These experimental kernels are not security-supported by Canonical.
+
+Install the linux-mst-hdr meta-package to track this PPA's kernel updates.
+
+Source, patch provenance, build instructions and removal instructions:
+https://github.com/usatiuk/ubuntu-mst-hdr-kernel

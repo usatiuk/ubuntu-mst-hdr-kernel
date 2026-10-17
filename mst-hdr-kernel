@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-TOOL_VERSION="0.1.1"
+TOOL_VERSION="0.2.0"
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 WORK_ROOT="${ROOT_DIR}/.work"
 SOURCE_CACHE_ROOT="${WORK_ROOT}/source-cache"
@@ -11,8 +11,8 @@ SOURCE_DIR="${CURRENT_DIR}/source"
 META_DIR="${CURRENT_DIR}/meta"
 MANIFEST="${CURRENT_DIR}/manifest.env"
 DIST_ROOT="${ROOT_DIR}/dist"
-PATCH_FILE="${ROOT_DIR}/patches/intel-mst-hdr-v3-ubuntu-7.0.patch"
-PATCH_SHA256_EXPECTED="f4f5215b2019f5e0714472af05d403f4f9046e7f2938795636e6cb63ce76f019"
+PATCH_FILE="${ROOT_DIR}/patches/intel-mst-vrr-hdr-v6-ubuntu-7.0.patch"
+PATCH_SHA256_EXPECTED="8a8b9b40462337acfba9c4903b52c098757eb71a5e99fdaaa9afd9cf574056db"
 BUILDER_IMAGE="${MST_HDR_BUILDER_IMAGE:-mst-hdr-kernel-builder:ubuntu-26.04}"
 STOCK_META_PACKAGE="linux-generic-hwe-26.04"
 TARGET_SUITE="resolute"
@@ -69,16 +69,19 @@ verify_patch() {
     [[ "$actual" == "$PATCH_SHA256_EXPECTED" ]] ||
         die "backport checksum mismatch: expected $PATCH_SHA256_EXPECTED, got $actual"
 
-    expected_paths=$'drivers/gpu/drm/i915/display/intel_display_types.h\n'
+    expected_paths=$'drivers/gpu/drm/display/drm_dp_mst_topology.c\n'
+    expected_paths+=$'drivers/gpu/drm/i915/display/intel_ddi.c\n'
+    expected_paths+=$'drivers/gpu/drm/i915/display/intel_display_types.h\n'
     expected_paths+=$'drivers/gpu/drm/i915/display/intel_dp.c\n'
     expected_paths+=$'drivers/gpu/drm/i915/display/intel_dp.h\n'
-    expected_paths+='drivers/gpu/drm/i915/display/intel_dp_mst.c'
+    expected_paths+=$'drivers/gpu/drm/i915/display/intel_dp_mst.c\n'
+    expected_paths+='drivers/gpu/drm/i915/display/intel_vrr.c'
     actual_paths="$(
         sed -n 's#^+++ b/##p' "$PATCH_FILE" |
             sort -u
     )"
     [[ "$actual_paths" == "$expected_paths" ]] ||
-        die "backport changes paths outside the reviewed i915 display set"
+        die "backport changes paths outside the reviewed DRM display set"
 }
 
 derive_versions() {
@@ -147,9 +150,13 @@ resolve_running_source() {
 resolve_latest_source() {
     local candidate
 
+    require_image >&2
     candidate="$(
-        apt-cache policy linux-source |
-            awk '/Candidate:/ { print $2; exit }'
+        docker run --rm "$BUILDER_IMAGE" bash -Eeuo pipefail -c '
+            apt-get update >&2
+            apt-cache policy linux-source |
+                awk "/Candidate:/ { print \$2; exit }"
+        '
     )"
     [[ -n "$candidate" && "$candidate" != "(none)" ]] ||
         die "cannot resolve the current linux-source candidate"
@@ -191,7 +198,8 @@ build_image() {
     fi
 
     note "Building Ubuntu 26.04 kernel builder image"
-    docker build "${options[@]}" "${ROOT_DIR}/container"
+    BUILDX_CONFIG="${WORK_ROOT}/buildx" \
+        docker build "${options[@]}" "${ROOT_DIR}/container"
 }
 
 require_image() {
@@ -221,7 +229,8 @@ write_manifest() {
         printf 'PACKAGING_REVISION=%q\n' "$PACKAGING_REVISION"
         printf 'TARGET_SUITE=%q\n' "$TARGET_SUITE"
         printf 'PATCH_SHA256=%q\n' "$patch_hash"
-        printf 'PATCH_MESSAGE_ID=%q\n' "20260626214513.179943-1-gildekel@google.com"
+        printf 'PATCH_MESSAGE_ID=%q\n' "20260902051206.264215-1-xiaolu.xie@intel.com"
+        printf 'COLORIMETRY_MESSAGE_ID=%q\n' "20260626214513.179943-2-gildekel@google.com"
         printf 'EXTERNAL_ZFS_MODULES=%q\n' "omitted"
         printf 'PREPARED_AT=%q\n' "$prepared_at"
     } >"$MANIFEST"
@@ -393,7 +402,7 @@ apply_backport() {
         return
     fi
 
-    reverse_result=1
+    reverse_result=0
     patch --directory "$SOURCE_DIR" --strip=1 --fuzz=0 --reverse --dry-run \
         <"$PATCH_FILE" >/dev/null 2>&1 || reverse_result=$?
     if [[ "$reverse_result" -eq 0 ]]; then
@@ -419,7 +428,7 @@ omit_external_zfs_dependency() {
 prepare_source() {
     local mode="running"
     local explicit_version=""
-    local revision="1"
+    local revision="2"
     local refresh_source="false"
     local full_name email
 
@@ -490,7 +499,7 @@ prepare_source() {
                 --newversion "$CUSTOM_VERSION" \
                 --distribution "$TARGET_SUITE" \
                 --force-distribution \
-                "Backport Intel HDR over DP MST v3; omit unavailable Canonical-signed ZFS companion modules."
+                "Rebase Intel MST VRR/HDR v6 with 10-bpc and per-connector colorimetry; omit unavailable Canonical-signed ZFS companion modules."
             cp debian.master/changelog debian/changelog
         '
 

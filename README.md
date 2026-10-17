@@ -1,25 +1,34 @@
 # Ubuntu Intel MST-HDR kernel
 
 This repository prepares a complete Ubuntu 26.04 `generic` kernel containing
-the experimental Intel HDR-over-DisplayPort-MST v3 patch series. It builds a
+the experimental Intel VRR/HDR-over-DisplayPort-MST v6 patch series. It builds a
 parallel ABI (`999`) so the normal Ubuntu HWE kernel remains installed.
 
-The tested machine is an Ubuntu 26.04 NUC with:
+The v6 backport enables HDR metadata and VRR over Intel DisplayPort MST,
+including 10-bpc (30-bpp) input where supported by the monitor, platform and
+available link bandwidth/DSC. It also includes Gil Dekel's per-monitor
+colorimetry capability handling. Color depth is negotiated rather than forced.
 
-- Ubuntu kernel `7.0.0-28-generic`
+**ZFS modules are not provided for this custom kernel ABI. Do not use it on
+systems that require ZFS, including ZFS root filesystems.** Keep a stock Ubuntu
+kernel installed for rollback. The supplied kernel image is unsigned.
+
+The target machine is an Ubuntu 26.04.1 NUC with:
+
+- Ubuntu kernel `7.0.0-38-generic`
 - Intel `8086:7d51`, bound to `i915`
 - Dell U2725QE on the logical MST connector `DP-5`
 - GNOME 50 on Wayland
 
-The upstream series was still unmerged and had unresolved Intel CI failures
-when this backport was prepared. Treat the result as an experimental test
+The upstream series is still unmerged; CI results do not establish hardware
+correctness for this backport. Treat the result as an experimental test
 kernel, not a security-supported replacement for Ubuntu's kernel.
 
 ## Design
 
 The kernel keeps Ubuntu's `linux` source package and `generic` flavour. Only
-the ABI and Debian version change. For Ubuntu source `7.0.0-28.28` and
-packaging revision 1, the important outputs are:
+the ABI and Debian version change. For Ubuntu source `7.0.0-38.38` and
+packaging revision 2, the important outputs are:
 
 ```text
 linux-image-unsigned-7.0.0-999-generic
@@ -85,12 +94,13 @@ Alternative targets are:
 
 ```bash
 ./mst-hdr-kernel prepare --latest
-./mst-hdr-kernel prepare --source-version 7.0.0-28.28
+./mst-hdr-kernel prepare --source-version 7.0.0-38.38
 ./mst-hdr-kernel prepare --running --revision 2
 ./mst-hdr-kernel prepare --running --refresh-source
 ```
 
-Preparation verifies the pinned patch checksum, downloads the exact Ubuntu
+The default packaging revision is 2 for the v6 backport. Preparation verifies
+the pinned patch checksum, downloads the exact Ubuntu
 source, applies the backport with fuzz disabled, creates the `999` changelog
 entry, removes the unsatisfiable dependency on Canonical's separately signed
 ZFS modules, and generates the meta-package. Downloaded Ubuntu source-package
@@ -159,15 +169,19 @@ To remove the custom kernel, boot a stock Ubuntu kernel first and run:
 ## PPA-ready source packages
 
 Launchpad accepts signed source uploads, not locally built `.deb` files.
-Generate kernel and meta-package uploads with:
+Generate unsigned kernel and meta-package source artifacts entirely in Docker
+with `./mst-hdr-kernel build-source`. To sign them using an existing host GPG
+key, generate kernel and meta-package uploads with:
 
 ```bash
 ./mst-hdr-kernel build-source --sign-key YOUR_GPG_KEY_ID
 ```
 
-Signing happens on the host; the private key is never mounted into the
-builder container. The source packages are also unpacked again in a clean
-directory before being collected under `dist/<version>/source/`. The kernel
+Signing is a separate optional host action; the private key is never mounted
+into the builder container. Unsigned artifacts are not accepted for Launchpad
+upload. Preparing or building packages never uploads them. The source packages
+are also unpacked again in a clean directory before being collected under
+`dist/<version>/source/`. The kernel
 upload references Ubuntu's existing `linux_7.0.0.orig.tar.gz` in the primary
 archive, so that 255 MB file is not uploaded to the PPA.
 
@@ -187,22 +201,25 @@ the kernel binaries are published. It then builds automatically.
 No Launchpad account, PPA, upload destination, or GitHub automation is
 created by this repository.
 
+The public PPA is <https://launchpad.net/~usatiuk/+archive/ubuntu/linux-mst-hdr>.
+Its description is maintained in [meta/ppa-description.txt](meta/ppa-description.txt).
+
 ## Updating
 
-Ubuntu's current Resolute generic package at the time of the tested build is
-`7.0.0-28.28`. The corresponding patched package version is
-`7.0.0-999.28+msthdr1`:
+Ubuntu's current Resolute generic package checked on October 17, 2026 is
+`7.0.0-38.38`. The corresponding patched package version with `--revision 2` is
+`7.0.0-999.38+msthdr2`:
 
 - `7.0.0` is the kernel base version.
 - `999` is the reserved custom ABI.
-- `.28` tracks the Ubuntu upload revision.
-- `+msthdr1` identifies revision 1 of this backport and packaging.
+- `.38` tracks the Ubuntu upload revision.
+- `+msthdr2` identifies revision 2 of this backport and packaging.
 
-For a later Ubuntu update, refresh the host's package metadata, prepare the
-new source, and build/upload both source packages:
+For a later Ubuntu update, prepare the new source and build/upload both source
+packages. `--latest` refreshes APT metadata inside a disposable Docker container;
+it does not use or update the host APT indexes:
 
 ```bash
-sudo apt update
 ./mst-hdr-kernel prepare --latest
 ./mst-hdr-kernel build-source --sign-key YOUR_GPG_KEY_ID
 
@@ -221,7 +238,7 @@ path. The stock `linux-generic-hwe-26.04` meta-package continues updating
 independently.
 
 For local testing before uploading, run `build-local` after `prepare`.
-Use `--revision 2` (then 3, and so on) when changing the backport or packaging
+Use `--revision 3` (then 4, and so on) when changing the backport or packaging
 without changing Ubuntu's source version. If the patch no longer applies,
 preparation stops without fuzzing it into place. A reverse-applying patch is
 reported separately because it may mean Ubuntu already contains the feature.
@@ -235,4 +252,4 @@ Refresh the container after Ubuntu changes kernel build dependencies:
 ## Patch provenance
 
 See [patches/README.md](patches/README.md) for upstream Message-IDs, archives,
-the exact checksum, and the Ubuntu 7.0 context adaptations.
+the exact checksums, and the Ubuntu 7.0 adaptations.
