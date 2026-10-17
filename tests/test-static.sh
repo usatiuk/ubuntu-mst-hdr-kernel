@@ -5,6 +5,7 @@ root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 
 bash -n "${root}/mst-hdr-kernel"
 "${root}/mst-hdr-kernel" self-test
+python3 "${root}/tests/test-workflows.py"
 
 test -x "${root}/mst-hdr-kernel"
 test -x "${root}/meta/debian/rules"

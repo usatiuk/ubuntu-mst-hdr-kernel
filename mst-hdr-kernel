@@ -14,7 +14,6 @@ DIST_ROOT="${ROOT_DIR}/dist"
 PATCH_FILE="${ROOT_DIR}/patches/intel-mst-vrr-hdr-v6-ubuntu-7.0.patch"
 PATCH_SHA256_EXPECTED="8a8b9b40462337acfba9c4903b52c098757eb71a5e99fdaaa9afd9cf574056db"
 BUILDER_IMAGE="${MST_HDR_BUILDER_IMAGE:-mst-hdr-kernel-builder:ubuntu-26.04}"
-STOCK_META_PACKAGE="linux-generic-hwe-26.04"
 TARGET_SUITE="resolute"
 
 note() {
@@ -547,10 +546,10 @@ build_local() {
             fi
         }
         if ! {
-            cd /workspace/.work/current/source
-            run_kernel_rules clean
-            run_kernel_rules binary
-            cd /workspace/.work/current/meta
+            cd /workspace/.work/current/source &&
+            run_kernel_rules clean &&
+            run_kernel_rules binary &&
+            cd /workspace/.work/current/meta &&
             dpkg-buildpackage -b -us -uc
         } >/workspace/.work/current/build-local.log 2>&1; then
             tail -n 200 /workspace/.work/current/build-local.log >&2
@@ -599,7 +598,7 @@ verify_source_roundtrip() {
         meta_dsc=(linux-mst-hdr-meta_*.dsc)
         ((${#kernel_dsc[@]} == 1 && ${#meta_dsc[@]} == 1))
         if ! {
-            dpkg-source -x "${kernel_dsc[0]}" roundtrip/kernel
+            dpkg-source -x "${kernel_dsc[0]}" roundtrip/kernel &&
             dpkg-source -x "${meta_dsc[0]}" roundtrip/meta
         } >roundtrip.log 2>&1; then
             tail -n 200 roundtrip.log >&2
@@ -653,9 +652,9 @@ build_source() {
     note "Building kernel and meta source packages"
     docker_run bash -Eeuo pipefail -c '
         if ! {
-            cd /workspace/.work/current/source
-            dpkg-buildpackage -S -sd -us -uc
-            cd /workspace/.work/current/meta
+            cd /workspace/.work/current/source &&
+            dpkg-buildpackage -S -sd -us -uc &&
+            cd /workspace/.work/current/meta &&
             dpkg-buildpackage -S -us -uc
         } >/workspace/.work/current/build-source.log 2>&1; then
             tail -n 200 /workspace/.work/current/build-source.log >&2
@@ -687,8 +686,7 @@ secure_boot_is_disabled() {
 
 install_packages() {
     local directory
-    local base_release
-    local available_kib
+    local base_release pattern package
     local -a packages
 
     load_manifest
@@ -697,32 +695,24 @@ install_packages() {
     secure_boot_is_disabled ||
         die "Secure Boot is enabled or indeterminate; disable it before installing this unsigned kernel"
     need_command findmnt
-    if findmnt --raw --noheadings --types zfs 2>/dev/null | grep -q . ||
-        lsmod 2>/dev/null | grep -q '^zfs '; then
+    if findmnt --raw --noheadings --types zfs 2>/dev/null | grep . >/dev/null ||
+        lsmod 2>/dev/null | grep '^zfs ' >/dev/null; then
         die "ZFS is active; this custom ABI intentionally omits Canonical-signed ZFS modules"
     fi
-    dpkg-query -W -f='${db:Status-Status}' "$STOCK_META_PACKAGE" 2>/dev/null |
-        grep -qx 'installed' ||
-        die "stock rollback meta-package is not installed: $STOCK_META_PACKAGE"
-    find /boot -maxdepth 1 -type f -name 'vmlinuz-*-generic' \
-        ! -name 'vmlinuz-*-999-generic' | grep -q . ||
-        die "no stock Ubuntu kernel image found in /boot"
-
-    available_kib="$(df -Pk /boot | awk 'NR == 2 { print $4 }')"
-    ((available_kib >= 300 * 1024)) ||
-        die "/boot has less than 300 MiB available"
-
     base_release="${KERNEL_RELEASE%-generic}"
-    packages=(
-        "$(find_one_package "$directory" "linux-headers-${base_release}_*.deb")"
-        "$(find_one_package "$directory" "linux-headers-${KERNEL_RELEASE}_*.deb")"
-        "$(find_one_package "$directory" "linux-image-unsigned-${KERNEL_RELEASE}_*.deb")"
-        "$(find_one_package "$directory" "linux-modules-${KERNEL_RELEASE}_*.deb")"
-        "$(find_one_package "$directory" "linux-mst-hdr_*.deb")"
-    )
+    packages=()
+    for pattern in \
+        "linux-headers-${base_release}_*.deb" \
+        "linux-headers-${KERNEL_RELEASE}_*.deb" \
+        "linux-image-unsigned-${KERNEL_RELEASE}_*.deb" \
+        "linux-modules-${KERNEL_RELEASE}_*.deb" \
+        "linux-mst-hdr_*.deb"; do
+        package="$(find_one_package "$directory" "$pattern")"
+        packages+=("$package")
+    done
 
     note "Installing custom ABI packages; GRUB configuration is left to package triggers"
-    sudo apt-get install -y -- "${packages[@]}"
+    sudo apt-get install -- "${packages[@]}"
     note "Installed $KERNEL_RELEASE. Reboot manually when ready."
 }
 
@@ -796,32 +786,22 @@ verify_running() {
 }
 
 remove_packages() {
-    local installed_manifest="/usr/share/linux-mst-hdr/mst-hdr-build-manifest"
-    local -a candidates installed
-    local package
+    local package version status package_list
+    local -a installed
 
-    [[ -r "$installed_manifest" ]] ||
-        die "installed MST-HDR build manifest not found"
-    # shellcheck disable=SC1090
-    source "$installed_manifest"
-
-    candidates=(
-        linux-mst-hdr
-        "linux-image-unsigned-${KERNEL_RELEASE}"
-        "linux-modules-${KERNEL_RELEASE}"
-        "linux-headers-${KERNEL_RELEASE}"
-        "linux-headers-${KERNEL_RELEASE%-generic}"
-    )
+    package_list="$(dpkg-query -W -f='${Package}\t${Version}\t${db:Status-Status}\n')"
     installed=()
-    for package in "${candidates[@]}"; do
-        if dpkg-query -W -f='${db:Status-Status}' "$package" 2>/dev/null |
-            grep -qx installed; then
-            installed+=("$package")
-        fi
-    done
-    ((${#installed[@]})) || die "no installed MST-HDR packages found"
-    if [[ "$(uname -r)" == "$KERNEL_RELEASE" ]]; then
-        warn "removing the running kernel; loading additional modules may fail afterward. Reboot into a stock Ubuntu kernel after removal"
+    while IFS=$'\t' read -r package version status; do
+        [[ "$status" != not-installed && "$version" =~ \+msthdr[0-9]+$ ]] || continue
+        case "$package" in
+            linux-mst-hdr|linux-image-unsigned-*-999-generic|linux-modules-*-999-generic|linux-headers-*-999|linux-headers-*-999-generic)
+                installed+=("$package")
+                ;;
+        esac
+    done <<<"$package_list"
+    if ((${#installed[@]} == 0)); then
+        note "No MST-HDR packages remain"
+        return
     fi
     note "Purging custom packages; stock Ubuntu kernels are untouched"
     sudo apt-get purge -- "${installed[@]}"

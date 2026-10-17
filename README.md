@@ -57,11 +57,11 @@ source downloads are handed back to that UID/GID.
 ## Safety
 
 - Secure Boot must be disabled before installing the unsigned kernel.
-- `linux-generic-hwe-26.04` and a stock kernel in `/boot` are mandatory.
+- Keep a stock Ubuntu kernel available for rollback.
 - The installer does not remove or overwrite stock packages.
 - The installer and package triggers do not customize GRUB settings.
 - Nothing reboots automatically.
-- Removal is refused while the custom kernel is running.
+- Installation and removal use APT and Ubuntu's normal kernel package hooks.
 - The custom ABI omits Ubuntu's separately signed ZFS companion package.
   Installation is refused when ZFS is active; the tested machine uses ext4.
 
@@ -166,8 +166,10 @@ To remove the custom kernel, run:
 ./mst-hdr-kernel remove
 ```
 
-You can remove it while it is running. Loading additional kernel modules may
-fail after removal, so reboot into a stock Ubuntu kernel afterward.
+Ubuntu may ask **“Abort removal of the running kernel?”** Choose **No** to
+proceed. Loading additional kernel modules may fail after removal, so reboot
+into a stock Ubuntu kernel afterward. The command also handles packages left
+by an interrupted removal; it does not need the meta-package or its manifest.
 
 ## PPA-ready source packages
 
