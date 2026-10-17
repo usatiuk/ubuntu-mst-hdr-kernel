@@ -160,11 +160,14 @@ Hardware acceptance still requires:
 3. Confirm both displays retain their native modes.
 4. Test dock hotplug and suspend/resume.
 
-To remove the custom kernel, boot a stock Ubuntu kernel first and run:
+To remove the custom kernel, run:
 
 ```bash
 ./mst-hdr-kernel remove
 ```
+
+You can remove it while it is running. Loading additional kernel modules may
+fail after removal, so reboot into a stock Ubuntu kernel afterward.
 
 ## PPA-ready source packages
 

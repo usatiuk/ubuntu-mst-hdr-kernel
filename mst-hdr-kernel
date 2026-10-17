@@ -800,8 +800,6 @@ remove_packages() {
     local -a candidates installed
     local package
 
-    [[ "$(uname -r)" != *-999-generic ]] ||
-        die "refusing to remove the currently running custom kernel; boot stock first"
     [[ -r "$installed_manifest" ]] ||
         die "installed MST-HDR build manifest not found"
     # shellcheck disable=SC1090
@@ -822,6 +820,9 @@ remove_packages() {
         fi
     done
     ((${#installed[@]})) || die "no installed MST-HDR packages found"
+    if [[ "$(uname -r)" == "$KERNEL_RELEASE" ]]; then
+        warn "removing the running kernel; loading additional modules may fail afterward. Reboot into a stock Ubuntu kernel after removal"
+    fi
     note "Purging custom packages; stock Ubuntu kernels are untouched"
     sudo apt-get purge -- "${installed[@]}"
 }
